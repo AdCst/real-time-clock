@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时时钟 - 常亮显示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a2a6c, #2a3e8c, #3a52ac);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .container {
+            text-align: center;
+            padding: 20px;
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .header {
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .clock-container {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 20px;
+            padding: 40px 20px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+        }
+        
+        .time {
+            font-size: 5.5rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin: 10px 0;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+        
+        .date {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            opacity: 0.9;
+        }
+        
+        .info-panel {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin-top: 30px;
+            gap: 15px;
+        }
+        
+        .info-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px 20px;
+            min-width: 180px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .info-card h3 {
+            font-size: 1rem;
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+        
+        .info-card p {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        
+        .status {
+            margin-top: 30px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+        
+        .instructions {
+            margin-top: 30px;
+            font-size: 0.9rem;
+            opacity: 0.7;
+            max-width: 500px;
+            line-height: 1.5;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+        
+        @media (max-width: 768px) {
+            h1 { font-size: 2.2rem; }
+            .time { font-size: 4rem; }
+            .date { font-size: 1.5rem; }
+            .info-card { min-width: 150px; }
+        }
+        
+        @media (max-width: 480px) {
+            h1 { font-size: 1.8rem; }
+            .time { font-size: 3rem; }
+            .date { font-size: 1.2rem; }
+            .clock-container { padding: 25px 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>实时时钟</h1>
+            <p class="subtitle">屏幕常亮 • 任何设备可访问</p>
+        </div>
+        
+        <div class="clock-container">
+            <div class="time" id="time">00:00:00</div>
+            <div class="date" id="date">2023年1月1日 星期一</div>
+        </div>
+        
+        <div class="info-panel">
+            <div class="info-card">
+                <h3>设备时区</h3>
+                <p id="timezone">UTC+0</p>
+            </div>
+            <div class="info-card">
+                <h3>页面已运行</h3>
+                <p id="uptime">0 分钟</p>
+            </div>
+            <div class="info-card">
+                <h3>屏幕状态</h3>
+                <p id="screen-status">常亮中</p>
+            </div>
+        </div>
+        
+        <div class="status">
+            <div class="status-indicator"></div>
+            <span>屏幕保持常亮 • 时间实时更新</span>
+        </div>
+        
+        <div class="instructions">
+            提示：此页面会阻止设备自动锁屏。适用于需要长时间显示时间的场景，如会议室、前台等。
+            任何设备只需打开此网页即可使用，无需安装任何应用。
+        </div>
+    </div>
+
+    <script>
+        // 防止屏幕休眠的API
+        let wakeLock = null;
+        
+        // 页面运行时间
+        let startTime = Date.now();
+        let uptimeInterval;
+        
+        // 初始化时间显示
+        function updateTime() {
+            const now = new Date();
+            
+            // 更新时间
+            const timeString = now.toLocaleTimeString('zh-CN');
+            document.getElementById('time').textContent = timeString;
+            
+            // 更新日期
+            const dateOptions = { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                weekday: 'long'
+            };
+            const dateString = now.toLocaleDateString('zh-CN', dateOptions);
+            document.getElementById('date').textContent = dateString;
+            
+            // 更新时区
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const offset = -now.getTimezoneOffset() / 60;
+            const timezoneString = `UTC${offset >= 0 ? '+' : ''}${offset}`;
+            document.getElementById('timezone').textContent = timezoneString;
+        }
+        
+        // 更新运行时间
+        function updateUptime() {
+            const uptimeMs = Date.now() - startTime;
+            const uptimeMins = Math.floor(uptimeMs / 60000);
+            const uptimeHours = Math.floor(uptimeMins / 60);
+            
+            let uptimeText;
+            if (uptimeHours > 0) {
+                uptimeText = `${uptimeHours} 小时 ${uptimeMins % 60} 分钟`;
+            } else {
+                uptimeText = `${uptimeMins} 分钟`;
+            }
+            
+            document.getElementById('uptime').textContent = uptimeText;
+        }
+        
+        // 请求屏幕常亮
+        async function requestWakeLock() {
+            try {
+                // 检查浏览器是否支持Wake Lock API
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    document.getElementById('screen-status').textContent = '常亮中';
+                    
+                    // 监听唤醒锁释放
+                    wakeLock.addEventListener('release', () => {
+                        document.getElementById('screen-status').textContent = '可能休眠';
+                    });
+                    
+                    console.log('屏幕常亮已启用');
+                } else {
+                    // 如果不支持Wake Lock API，使用替代方案
+                    document.getElementById('screen-status').textContent = '使用防休眠模式';
+                    console.log('Wake Lock API 不支持，使用替代方案');
+                    
+                    // 替代方案：通过定期播放无声视频保持屏幕唤醒
+                    keepScreenAwakeFallback();
+                }
+            } catch (err) {
+                console.error(`唤醒锁错误: ${err.name}, ${err.message}`);
+                document.getElementById('screen-status').textContent = '防休眠模式';
+                
+                // 如果Wake Lock失败，也使用替代方案
+                keepScreenAwakeFallback();
+            }
+        }
+        
+        // 保持屏幕唤醒的替代方案
+        function keepScreenAwakeFallback() {
+            // 定期重置一个隐藏的视频元素以防止休眠
+            setInterval(() => {
+                // 轻微移动鼠标指针（不可见）
+                window.dispatchEvent(new Event('mousemove'));
+            }, 30000); // 每30秒触发一次
+            
+            // 添加一个不可见的iframe，定期刷新以防止休眠
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = "about:blank";
+            document.body.appendChild(iframe);
+            
+            // 每5分钟重新加载iframe（轻量级操作）
+            setInterval(() => {
+                iframe.contentWindow.location.reload();
+            }, 300000);
+        }
+        
+        // 处理页面可见性变化
+        function handleVisibilityChange() {
+            if (document.visibilityState === 'visible') {
+                // 页面重新可见时，重新请求唤醒锁
+                if (wakeLock !== null) {
+                    requestWakeLock();
+                }
+            }
+        }
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 立即更新时间
+            updateTime();
+            updateUptime();
+            
+            // 设置定期更新时间
+            setInterval(updateTime, 1000);
+            setInterval(updateUptime, 60000);
+            
+            // 请求屏幕常亮
+            requestWakeLock();
+            
+            // 监听页面可见性变化
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            
+            // 添加用户交互监听，某些设备需要用户交互才能启用屏幕常亮
+            document.body.addEventListener('click', () => {
+                if (!wakeLock) {
+                    requestWakeLock();
+                }
+            });
+            
+            // 防止上下文菜单
+            document.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                return false;
+            });
+        });
+        
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', async () => {
+            if (wakeLock !== null) {
+                await wakeLock.release();
+                wakeLock = null;
+            }
+        });
+    </script>
+</body>
+</html>
